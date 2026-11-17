@@ -24,7 +24,7 @@
 </div></div></section>
 <section id="groceries" class="section"><div class="grid">
 <div class="card s12"><h2>Your Nigerian weekly food plan 🇳🇬</h2><p class="sub">A practical seven-day menu built around familiar Nigerian meals and the foods you enjoy. Swap days freely and adjust quantities to your appetite.</p><div class="note">Shopping quantities below are estimates for one adult for seven days. They are a starting point, not strict portions. Buy fresh produce according to what is available and affordable in your market.</div><div class="row" style="margin-top:12px"><div><label for="shoppingWeek">Shopping week begins</label><input id="shoppingWeek" type="date"></div><div><label for="householdSize">People to shop for</label><select id="householdSize"><option value="1">1 person</option><option value="2">2 people</option><option value="3">3 people</option><option value="4">4 people</option><option value="5">5 people</option></select></div></div><div id="weeklyMenu"></div></div>
-<div class="card s7"><h2>Weekly shopping list</h2><p class="sub">Tick each item as you buy it. Quantities adjust to the number of people selected.</p><div id="groceriesList"></div><form id="customGroceryForm" style="margin-top:14px"><label for="customGrocery">Add another item</label><div class="row"><input id="customGrocery" placeholder="e.g. Palm oil" required><button class="secondary">＋ Add item</button></div></form><p id="shoppingProgress" class="sub"></p></div>
+<div class="card s7"><h2>Weekly shopping list</h2><p class="sub">Tick each item as you buy it. Quantities are combined across your selected meals and multiplied by the number of people.</p><div id="groceriesList"></div><form id="customGroceryForm" style="margin-top:14px"><label for="customGrocery">Add another item</label><div class="row"><input id="customGrocery" placeholder="e.g. Palm oil" required><button class="secondary">＋ Add item</button></div></form><p id="shoppingProgress" class="sub"></p></div>
 <div class="card s5"><h2>Market budget estimates</h2><p class="sub">Enter prices from your local market. These are your own estimates, not live market prices.</p><form id="budgetform"><label>Item</label><input id="item" placeholder="e.g. Eggs" required><label>Estimated cost (₦)</label><input id="cost" type="number" min="0" placeholder="e.g. 2500" required><button class="secondary">Add estimate</button></form><div id="budgetlist"></div><div class="metric" id="total">₦0</div><button type="button" class="secondary" id="clearBudget">Clear budget estimates</button></div>
 </div></section>
 <section id="activity" class="section"><div class="grid"><div class="card s6"><h2>Movement plan</h2><div class="meal"><b>Tuesday · Swimming</b><br><small>45–60 minutes, beginner lesson</small></div><div class="meal"><b>Wednesday · Gentle walk</b><br><small>Comfortable duration</small></div><div class="meal"><b>Thursday · Rest or stretching</b></div><div class="meal"><b>Friday · Dance or easy walk</b></div><div class="meal"><b>Saturday · Swimming</b><br><small>45–60 minutes, beginner lesson</small></div><div class="meal"><b>Sunday + Monday · Recovery</b></div></div><div class="card s12"><h2>Your four-week workout & dance programme</h2><p class="sub">A beginner-friendly plan built around your Tuesday and Saturday swimming lessons. Keep the pace comfortable; you can shorten, swap or skip a session. Tick each session when you complete it.</p><div class="note">Start each active session with 3–5 minutes of easy movement and finish with 3–5 minutes of gentle cool-down. During swimming lessons, follow your instructor and take breaks whenever needed. Stop if you feel unwell, dizzy or have pain.</div><div id="workoutPlan" style="margin-top:14px"></div><h3>Dance styles to try</h3><div class="grid"><div class="card s4"><b>Low-impact Afrobeats</b><p class="sub">Step-touch side to side, gentle shoulder rolls, alternating toe taps and easy arm waves. Keep both feet close to the floor.</p></div><div class="card s4"><b>Gospel praise dance</b><p class="sub">March gently in place, step forward and back, sway side to side and add relaxed claps or arm raises.</p></div><div class="card s4"><b>Gentle freestyle</b><p class="sub">Choose a favourite song. Repeat comfortable side steps, heel digs and slow turns. Leave out jumps and fast pivots.</p></div></div><p class="sub" id="workoutSummary"></p></div><div class="card s12"><h2>Daily steps tracker</h2><p class="sub">Enter the step total from your phone or watch each day. Your daily goal is adjustable — start with a comfortable target.</p><form id="stepsForm"><div class="row"><div><label>Steps today</label><input id="stepCount" type="number" min="0" max="100000" step="1" placeholder="e.g. 4500" required></div><div><label>Daily step goal</label><input id="stepGoal" type="number" min="500" max="50000" step="500" required></div></div><label>Date</label><input id="stepDate" type="date" required><button class="primary">Save daily steps</button></form><div class="metric"><span id="stepToday">0</span><small> steps recorded</small></div><div class="progress"><span id="stepBar" style="width:0%"></span></div><p class="sub" id="stepGoalText"></p><h3>Recent step counts</h3><div id="stepHistory" class="empty">No step counts recorded yet.</div></div>
@@ -152,10 +152,34 @@ function renderWeeklyMenu(){
  document.querySelectorAll('[data-meal-day]').forEach(sel=>sel.onchange=()=>{let updated=selectedWeekMeals();updated[Number(sel.dataset.mealDay)][Number(sel.dataset.mealSlot)]=sel.value;put(weekMealKey(),updated);$('menuStatus').textContent='Menu changed. Generate the shopping list again to update ingredients.'});
  $('generateShopping').onclick=()=>{buildGeneratedShopping();$('menuStatus').textContent='Your shopping list now matches the meals selected for this week.'};
 }
+function parseIngredientAmount(raw){
+ const value=String(raw||'').trim();
+ const match=value.match(/^(\\d+(?:\\.\\d+)?)(?:\\s*[-–]\\s*(\\d+(?:\\.\\d+)?))?\\s*(.*)$/);
+ if(!match)return null;
+ return {min:Number(match[1]),max:match[2]?Number(match[2]):Number(match[1]),unit:(match[3]||'pieces').trim().toLowerCase()};
+}
+function formatIngredientAmount(total,people){
+ const parts=Object.entries(total.units).map(([unit,range])=>{
+  const min=range.min*people,max=range.max*people;
+  const fmt=n=>Number.isInteger(n)?String(n):String(Math.round(n*100)/100);
+  const amount=min===max?fmt(min):fmt(min)+'–'+fmt(max);
+  return amount+' '+unit;
+ });
+ if(total.notes.length)parts.push([...new Set(total.notes)].join('; '));
+ return parts.join(' + ')||'check pantry';
+}
 function buildGeneratedShopping(){
  const meals=selectedWeekMeals(),people=Number($('householdSize').value||1),totals={};
- meals.flat().forEach(meal=>(mealIngredients[meal]||[]).forEach(([name,qty])=>{if(!totals[name])totals[name]={qty:[],count:0};totals[name].qty.push(qty);totals[name].count++}));
- const list=Object.entries(totals).map(([name,v])=>({name,qty:v.qty.join(' + ')}));
+ meals.flat().forEach(meal=>(mealIngredients[meal]||[]).forEach(([name,qty])=>{
+  if(!totals[name])totals[name]={units:{},notes:[]};
+  const parsed=parseIngredientAmount(qty);
+  if(parsed){
+   if(!totals[name].units[parsed.unit])totals[name].units[parsed.unit]={min:0,max:0};
+   totals[name].units[parsed.unit].min+=parsed.min;
+   totals[name].units[parsed.unit].max+=parsed.max;
+  }else if(qty&&!totals[name].notes.includes(qty))totals[name].notes.push(qty);
+ }));
+ const list=Object.entries(totals).map(([name,total])=>({name,qty:formatIngredientAmount(total,people)}));
  pantryExtras.forEach(([name,qty])=>{if(!totals[name])list.push({name,qty})});
  put('generatedShopping-'+shoppingWeekKey(),list);
  renderGroceries();
