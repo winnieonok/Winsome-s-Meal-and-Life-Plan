@@ -154,7 +154,7 @@ function renderWeeklyMenu(){
 }
 function parseIngredientAmount(raw){
  const value=String(raw||'').trim();
- const match=value.match(/^(\\d+(?:\\.\\d+)?)(?:\\s*[-–]\\s*(\\d+(?:\\.\\d+)?))?\\s*(.*)$/);
+ const match=value.match(/^(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?\s*(.*)$/);
  if(!match)return null;
  return {min:Number(match[1]),max:match[2]?Number(match[2]):Number(match[1]),unit:(match[3]||'pieces').trim().toLowerCase()};
 }
@@ -198,7 +198,7 @@ function renderGroceries(){
 }
 $('shoppingWeek').value=today;$('householdSize').value='1';
 $('shoppingWeek').onchange=()=>{renderWeeklyMenu();renderGroceries()};
-$('householdSize').onchange=renderGroceries;
+$('householdSize').onchange=()=>{if(get('generatedShopping-'+shoppingWeekKey(),[]).length)buildGeneratedShopping();else renderGroceries()};
 $('customGroceryForm').onsubmit=e=>{e.preventDefault();let week=shoppingWeekKey(),items=get('customShopping-'+week,[]),name=$('customGrocery').value.trim();if(name&&!items.some(x=>x.toLowerCase()===name.toLowerCase()))items.push(name);put('customShopping-'+week,items);$('customGrocery').value='';renderGroceries()};
 renderWeeklyMenu();renderGroceries();
 $('budgetform').onsubmit=e=>{e.preventDefault();let a=get('budget');a.push({item:$('item').value,cost:+$('cost').value});put('budget',a);e.target.reset();budgetUI()};function budgetUI(){let a=get('budget');$('budgetlist').innerHTML=a.map(x=>'<div class="meal">'+esc(x.item)+' <b style="float:right">₦'+x.cost.toLocaleString()+'</b></div>').join('');$('total').textContent='₦'+a.reduce((s,x)=>s+x.cost,0).toLocaleString()}budgetUI();
